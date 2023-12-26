@@ -1,0 +1,445 @@
+-- Default Settings --  
+local OreESPColor = Color3.fromRGB(255,255,255)
+local OreESPFixedESPSize = true
+local OreESPEnabled = false
+local OreESPTargets = {"All"}
+ 
+local FullbrightEnabled = false
+local FullbrightAmbientColor = Color3.fromRGB(178, 178, 178)
+ 
+local BiomeFarmEnabled = false
+local BiomeFarmBlacklist = true
+local BiomeFarmSelectedBiomes = {"Moon", "Blizzard", "Nature", "Flames", "Stormsurge", "Radiation"}
+local BiomeFarmSelectedBosses = {"Unknown Machine", "Archmage", "The Fallen", "Steve", "The Ripper", "The Paladin", "The Controller"}
+ 
+local SaveFolder = "BCW Overhaul"
+----------------------
+ 
+--[[
+    Credits to Stebulous for the Solaris UI Library
+ 
+    Source: https://github.com/Stebulous/solaris-ui-lib/blob/main/source.lua
+    Example: https://github.com/bloodball/UI-Librarys/blob/main/SolarisLib
+]]
+ 
+local SolarisLib = loadstring(game:HttpGet("https://github.com/Stebulous/solaris-ui-lib/blob/main/source.lua"))()
+local http = game:GetService("HttpService")
+ 
+function set(list)
+    local set = {}
+    for _, l in ipairs(list) do set[l] = true end
+    return set
+end
+ 
+function AddUI(part, color, fixed)
+    local partGui = Instance.new("BillboardGui", part)
+    if fixed then
+        partGui.Size = UDim2.new(0,10,0,10)
+    else
+        partGui.Size = UDim2.new(1,0,1,0)
+    end
+    partGui.AlwaysOnTop = true
+    partGui.Name = "Ore-ESP"
+    
+    local frame = Instance.new("Frame", partGui)
+    frame.BackgroundColor3 = color
+    frame.BackgroundTransparency = 0.75
+    frame.Size = UDim2.new(1,0,1,0)
+    frame.BorderSizePixel = 0
+    
+    local nameGui = Instance.new("BillboardGui", part)
+    if fixed then
+        nameGui.Size = UDim2.new(0,50,0,25)
+    else
+        nameGui.Size = UDim2.new(5,0,2.5,0)
+    end
+    nameGui.SizeOffset = Vector2.new(0,1)
+    nameGui.AlwaysOnTop = true
+    nameGui.Name = "Name"
+    
+    local text = Instance.new("TextLabel", nameGui)
+    text.Text = part.Parent.Name
+    text.TextColor3 = color
+    text.TextTransparency = 0.25
+    text.BackgroundTransparency = 1
+    text.TextScaled = true
+    text.Size = UDim2.new(1,0,1,0)
+    text.Font = Enum.Font.GothamSemibold
+    text.Name = "Text"
+end
+ 
+function split(inputstr, sep)
+    if sep == nil then
+        sep = "%s"
+    end
+    local t = {}
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+        table.insert(t, str)
+    end
+    return t
+end
+ 
+function indexOf(array, value)
+    for i, v in ipairs(array) do
+        if v == value then
+            return i
+        end
+    end
+    return nil
+end
+ 
+function SaveCfg(folder, cfg)
+    local content = {}
+    for i,v in pairs(SolarisLib.Flags) do
+        content[i] = v.Value
+    end
+    writefile(folder.."/configs/"..cfg..".json", tostring(http:JSONEncode(content)))
+end
+ 
+function LoadCfg(folder, cfg)
+    local content = http:JSONDecode(readfile(folder.."/configs/"..cfg..".json"))
+    table.foreach(content, function(key,value)
+        if SolarisLib.Flags[key] then
+            SolarisLib.Flags[key]:Set(value)
+        else
+            warn("cfg loader - could not find", key, value)
+        end
+    end)
+end
+ 
+local player = game.Players.LocalPlayer
+local isInCaves = game:GetService("Workspace"):FindFirstChild("Map") ~= nil
+local isInMainGame = game:GetService("Workspace"):FindFirstChild("Landscape") ~= nil
+ 
+local bosses = {
+    "Unknown Machine",
+    "Archmage",
+    "The Fallen",
+    "Steve",
+    "The Ripper",
+    "The Paladin",
+    "The Controller",
+    "Rain"
+}
+ 
+--[[
+    Normal:
+        BrickColor: Cyan
+        SoundId: 9063887851
+    Moon:
+        BrickColor: Electric blue
+        SoundId: 9063887851
+    Flames:
+        BrickColor: Neon orange
+        SoundId: 9064299636
+    Blizzard:
+        BrickColor: Pastel light blue
+        SoundId: 9064161163
+    Stormsurge:
+        BrickColor: Electric blue
+        SoundId: 9064286633
+    Radiation:
+        BrickColor: Really black
+        SoundId: 9583751773
+    PvC:
+        BrickColor: Bright violet
+        SoundId: 9200994158
+    HvUh:
+        BrickColor: Crimson
+        SoundId: 9200994158
+]]
+ 
+local biomes = {
+    ["9063887851"] = {
+        ["Cyan"] = "Normal",
+        ["Electric blue"] = "Moon"
+    },
+    ["9064161163"] = {
+        ["Pastel light blue"] = "Blizzard"
+    },
+    ["9064299636"] = {
+        ["Neon orange"] = "Flames"
+    },
+    ["9064101181"] = {
+        ["Electric blue"] = "Nature"
+    },
+    ["9064286633"] = {
+        ["Electric blue"] = "Stormsurge"
+    },
+    ["9583751773"] = {
+        ["Really black"] = "Radiation"
+    },
+    ["9200994158"] = {
+        ["Bright violet"] = "PvC",
+        ["Crimson"] = "HvUh"
+    }
+}
+ 
+repeat
+    wait()
+until game:GetService("Workspace"):FindFirstChild("backgroundmusic") ~= nil and game:GetService("Workspace"):FindFirstChild("Landscape") ~= nil and game:GetService("Workspace"):FindFirstChild("Landscape"):FindFirstChild("Water") ~= nil
+ 
+local currentBiome = biomes[split(game:GetService("Workspace").backgroundmusic.SoundId, "=")[2]][tostring(game:GetService("Workspace").Landscape.Water.BrickColor)]
+local biomeNames = {}
+for _,v1 in pairs(biomes) do
+    for _,v2 in pairs(v1) do
+        table.insert(biomeNames, v2)
+    end
+end
+ 
+local _OreESPTargets = set(OreESPTargets)
+local _BiomeFarmSelectedBiomes = set(BiomeFarmSelectedBiomes)
+local _BiomeFarmSelectedBosses = set(BiomeFarmSelectedBosses)
+ 
+-- The default light settings to revert to when you toggle the fullbright
+local NormalLightingSettings = {
+    Brightness = game:GetService("Lighting").Brightness,
+    ClockTime = game:GetService("Lighting").ClockTime,
+    FogEnd = game:GetService("Lighting").FogEnd,
+    GlobalShadows = game:GetService("Lighting").GlobalShadows,
+    Ambient = game:GetService("Lighting").Ambient
+}
+ 
+local win = SolarisLib:New({
+    Name = "Balanced Craftwars Overhaul",
+    FolderToSave = SaveFolder,
+})
+ 
+local visuals = win:Tab("Visuals")
+local fullbright = visuals:Section("Fullbright")
+ 
+game:GetService("Workspace").ChildAdded:Connect(function(child)
+    if child.Name == "backgroundmusic" then -- backgroundmusic gets readded to the workspace when the biome changes
+        wait(5) -- wait for the biome to load entirely just to be sure
+        local id = split(child.SoundId, "=")[2] -- get the song that is playing during the biome
+        local color = tostring(game:GetService("Workspace").Landscape.Water.BrickColor) -- get the color of the water
+        print(id, color)
+        if biomes[id] ~= nil then -- not all biomes are in the biomes list, if its not in there then just don't leave
+            if biomes[id][color] ~= nil then
+                currentBiome = biomes[id][color]
+                print("Biome switched to: "..currentBiome)
+                if BiomeFarmEnabled then
+                    if BiomeFarmBlacklist then
+                        if _BiomeFarmSelectedBiomes[currentBiome] then
+                            game:Shutdown() -- leave if the biome is blacklisted
+                        end
+                    else
+                        if not _BiomeFarmSelectedBiomes[currentBiome] then
+                            game:Shutdown() -- leave if the biome is not whitelisted
+                        end
+                    end
+                end
+            end
+        end
+    else
+        if BiomeFarmEnabled then
+            if BiomeFarmBlacklist then
+                if _BiomeFarmSelectedBosses[child.Name] then
+                    game:Shutdown() -- leave the game is the spawned boss is blacklisted
+                end
+            else
+                if not _BiomeFarmSelectedBosses[child.Name] then
+                    game:Shutdown() -- leave the game is the spawned boss is not whitelisted
+                end
+            end
+        end
+    end
+end)
+ 
+-- When player leaves, save the settings
+game.Players.PlayerRemoving:Connect(function(plr)
+    if plr == player then
+        SaveCfg(SaveFolder, "settings")
+    end
+end)
+ 
+-- Tells the player how to toggle the UI
+SolarisLib:Notification("Information", "To toggle the UI, press " .. SolarisLib.Settings["CloseBind"])
+ 
+-- If the player is in caves, add the Ore ESP
+if isInCaves then
+    game:GetService("Workspace").Map.Ores.ChildAdded:Connect(function(v)
+        if OreESPEnabled then
+            local rock = v:WaitForChild("Rock")
+            if _OreESPTargets["All"] or _OreESPTargets[rock.Parent.name] then
+                AddUI(rock, OreESPColor, OreESPFixedESPSize)
+            end
+        end
+    end)
+ 
+    local oreESP = visuals:Section("Ore ESP")
+ 
+    oreESP:Toggle("Enabled", OreESPEnabled, "OreESPEnabled", function(t)
+        OreESPEnabled = t
+        if OreESPEnabled then
+            print("Ore ESP Enabled")
+            for _,v in pairs(game:GetService("Workspace").Map.Ores:GetChildren()) do
+                if _OreESPTargets["All"] or _OreESPTargets[v.Rock.Parent.name] then
+                    AddUI(v.Rock, OreESPColor, OreESPFixedESPSize)
+                end
+            end
+        else
+            print("Ore ESP Disabled")
+            for _,v in pairs(game:GetService("Workspace").Map.Ores:GetChildren()) do
+                v.Rock:ClearAllChildren()
+            end
+        end
+    end)
+ 
+    oreESP:Toggle("Fixed ESP Size", OreESPFixedESPSize, "OreFixedESPSize", function(t)
+        OreESPFixedESPSize = t
+        if OreESPFixedESPSize then
+            print("Ore ESP Fixed Size Disabled")
+        else
+            print("Ore ESP Fixed Size Disabled")
+        end
+        if OreESPEnabled then
+            for _,v in pairs(game:GetService("Workspace").Map.Ores:GetChildren()) do
+                v.Rock:ClearAllChildren()
+                if _OreESPTargets["All"] or _OreESPTargets[v.Rock.Parent.name] then
+                    AddUI(v.Rock, OreESPColor, OreESPFixedESPSize)
+                end
+            end
+        end
+    end)
+ 
+    oreESP:MultiDropdown("Ore Targets", {    
+        "All",
+        "Iron",
+        "Lead",
+        "Gold",
+        "Diamond",
+        "Crystal",
+        "Cobalt",
+        "Oureclasium",
+        "Viridis",
+        "Tungsten",
+        "Titanium",
+        "Mithril",
+        "Adamantine",
+        "Titanstone",
+        "Plutonium",
+        "Irradium",
+        "Gemstone of Purity",
+        "Gemstone of Hatred",
+        "Purite",
+        "Hatrite",
+        "Hevenite",
+        "Hellite",
+        "Moonstone",
+        "Forbidden Crystal"
+    }, OreESPTargets, "OreTargets", function(t)
+        OreESPTargets = t
+        _OreESPTargets = set(OreESPTargets)
+        if OreESPEnabled then
+            for _,v in pairs(game:GetService("Workspace").Map.Ores:GetChildren()) do
+                v.Rock:ClearAllChildren()
+                if _OreESPTargets["All"] or _OreESPTargets[v.Rock.Parent.name] then
+                    AddUI(v.Rock, OreESPColor, OreESPFixedESPSize)
+                end
+            end
+        end
+    end)
+ 
+    oreESP:Colorpicker("ESP Color", OreESPColor, "ESPColor", function(t)
+        OreESPColor = t
+        if OreESPEnabled then
+            for _,v in pairs(game:GetService("Workspace").Map.Ores:GetChildren()) do
+                v.Rock:ClearAllChildren()
+                if _OreESPTargets["All"] or _OreESPTargets[v.Rock.Parent.name] then
+                    AddUI(v.Rock, OreESPColor, OreESPFixedESPSize)
+                end
+            end
+        end
+    end)
+end
+ 
+-- If the player is in the main game, add the Biome Farm
+if isInMainGame then
+    local biomefarmTab = win:Tab("Biome Farm")
+    local biomefarm = biomefarmTab:Section("Biome Farm")
+ 
+    biomefarm:Toggle("Enabled", BiomeFarmEnabled, "BiomeFarmEnabled", function(t)
+        BiomeFarmEnabled = t
+    end)
+    
+    biomefarm:Dropdown("Blacklist", {"Blacklist", "Whitelist"}, (BiomeFarmBlacklist and "Blacklist" or "Whitelist"), "BiomeFarmBlacklist", function(t)
+        BiomeFarmBlacklist = t == "Blacklist"
+    end)
+    
+    biomefarm:MultiDropdown("Selected Biomes", biomeNames, BiomeFarmSelectedBiomes, "BiomeFarmBiomes", function(t)
+        BiomeFarmSelectedBiomes = t
+        _BiomeFarmSelectedBiomes = set(BiomeFarmSelectedBiomes)
+    end)
+    
+    biomefarm:MultiDropdown("Selected Bosses", bosses, BiomeFarmSelectedBosses, "BiomeFarmBosses", function(t)
+        BiomeFarmSelectedBosses = t
+        _BiomeFarmSelectedBosses = set(t)
+    end)
+end
+ 
+-- General hack
+fullbright:Toggle("Enabled", FullbrightEnabled, "FullbrightEnabled", function(t)
+    FullbrightEnabled = t
+    if FullbrightEnabled then
+        game:GetService("Lighting").Brightness = 1
+        game:GetService("Lighting").ClockTime = 12
+        game:GetService("Lighting").FogEnd = 786543
+        game:GetService("Lighting").GlobalShadows = false
+        game:GetService("Lighting").Ambient = FullbrightAmbientColor
+    else
+        game:GetService("Lighting").Brightness = NormalLightingSettings.Brightness
+        game:GetService("Lighting").ClockTime = NormalLightingSettings.ClockTime
+        game:GetService("Lighting").FogEnd = NormalLightingSettings.FogEnd
+        game:GetService("Lighting").GlobalShadows = NormalLightingSettings.GlobalShadows
+        game:GetService("Lighting").Ambient = NormalLightingSettings.Ambient
+    end
+end)
+ 
+fullbright:Colorpicker("Ambient Color", FullbrightAmbientColor, "FullbrightAmbientColor", function(t)
+    FullbrightAmbientColor = t
+    if FullbrightEnabled then
+        game:GetService("Lighting").Ambient = FullbrightAmbientColor
+    end
+end)
+ 
+LoadCfg(SaveFolder, "settings")
+ 
+-- automatically leaves the game if the current biome or boss is blacklisted or is not whitelisted
+if BiomeFarmEnabled and isInMainGame then
+    local boss = ""
+    for _,child in pairs(game:GetService("Workspace"):GetChildren()) do
+        if bosses[child.Name] then
+            boss = child.Name
+            print("Current boss: " .. boss)
+        end
+    end
+    if BiomeFarmBlacklist then
+        if _BiomeFarmSelectedBosses[boss] then
+            game:Shutdown() -- leave if the current boss is blacklisted
+        end
+    else
+        if not _BiomeFarmSelectedBosses[boss] then
+            game:Shutdown() -- leave if the current boss is not whitelisted
+        end
+    end
+    local id = split(game:GetService("Workspace").backgroundmusic.SoundId, "=")[2]
+    local color = tostring(game:GetService("Workspace").Landscape.Water.BrickColor)
+    if biomes[id] ~= nil then
+        if biomes[id][color] ~= nil then
+            currentBiome = biomes[id][color]
+            print("Current biome: "..currentBiome)
+            if BiomeFarmEnabled then
+                if BiomeFarmBlacklist then
+                    if _BiomeFarmSelectedBiomes[currentBiome] then
+                        game:Shutdown() -- leave if the current biome is blacklisted
+                    end
+                else
+                    if not _BiomeFarmSelectedBiomes[currentBiome] then
+                        game:Shutdown() -- leave if the current biome is not whitelisted
+                    end
+                end
+            end
+        end
+    end
+end
